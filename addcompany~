@@ -1,0 +1,194 @@
+<?php
+include_once("head.php"); 
+//include_once("logincheck.php");
+?>
+
+<div class="container">
+
+ 
+	            <form method="post"  role="form">
+
+                     <div class="form-group">
+			     <label>      username  </label>   
+  
+			    <input name="username"  class="form-control"   type="text"   placeholder="Enter username"  required> 
+	    		</div>
+			
+
+			  <div class="form-group">
+  			 <label> 	  voucher id    </label>   
+
+			    <input name="voucher_id"  type="text"   class="form-control"   placeholder="Enter voucher id "  required> 
+	    		</div>
+			
+ 			  <div class="form-group">
+			 
+			    <label>      Secret    </label>   
+			    <input name="secret"  type="password"  class="form-control" required  placeholder="Enter secret key" >  
+	    	 	</div>
+
+		 <div class="form-group">
+			 
+			 <label>  Captch code : <?php echo $km = rand(1,1000); 	?> </label>
+				<input type="hidden" name="captchorg" value ="<?php echo  $km;?>" >				
+				<input type="text" name="captcha" class="form-control" required placeholder="Please enter captch text" >	
+			</div>	                         
+		
+			<div class="form-group">
+                            
+                                <input id="task" name="task" type="submit"  class="btn btn-info"  value="Recharge" />
+
+                          </div>  
+                     
+                    </form>
+		<p> <a href="index.php"> Back to home Page </a> </p>
+
+                 </div>
+            
+
+<?php
+
+ function rechargeVoucher() {
+	include("dbconfig.php");
+ 	$conn = mysql_connect($dbhost, $dbuser, $dbpass);
+	mysql_select_db($dbName);
+	$secret = $_POST['secret'];
+	$sql = "SELECT * FROM sippyreseller where phonenumber=$secret";
+	$oldrec = mysqli_query([con],$sql);
+	$rowold = mysql_fetch_object($oldrec);
+	
+	$rowold->api_password = base64_decode($rowold->api_password);
+	
+ 		 if(!isset($rowold->email)){
+			$rowold->email = "";
+			$rowold->batchtag="";
+			$rowold->i_billing_plan = 0;
+			$rowold->api_access ="";
+			$rowold->api_password = ""; 
+  
+  		}
+
+	    $_SESSION['rowold'] = $rowold;
+
+		$_POST['email'] = $rowold->email;
+		$_POST['reseller_id'] = $rowold->id;
+ 		
+	    $params = array(new xmlrpcval(array("username" => new xmlrpcval($_POST['username'], "string"),
+                                    "voucher_id"     	=> new xmlrpcval($_POST['voucher_id'], "string"),
+
+                                     ), 'struct'));
+    $msg = new xmlrpcmsg('rechargeVoucher', $params);
+// echo "<pre>"; print_r($msg); echo "</pre>";
+    /* replace here URL  and credentials to access to the API */
+    $cli = new xmlrpc_client('https://38.130.112.22/xmlapi/xmlapi');
+    $cli->setSSLVerifyPeer(false);
+    $cli->setSSLVerifyHost(false);
+    $cli->setCredentials($rowold->api_access,$rowold->api_password, CURLAUTH_DIGEST);
+ 
+
+   $r = $cli->send($msg, 20);       /* 20 seconds timeout */
+   return $r;
+
+}
+ 
+ $showform = 1;
+$cp = 0;
+if(isset($_POST['task']) && $_POST['captchorg'] != $_POST['captcha'])
+	echo " <font  color='red'> invalid captch</font>";
+else
+	$cp=1;
+
+ 
+
+function sendEMail($a) {
+
+  $rowold = $_SESSION['rowold'];
+
+    $body = " 
+<table>
+<tr><td> Welcome to Mob-Voip </td></tr>
+<tr><td> Please keep this email for your records. Your recharge information is as follows:</td> </tr>
+<tr><td> &nbsp; </td></tr>
+<tr><td>      username : ${a['username']}   </td> </tr>	
+<tr><td>      Vocher id : ${a['voucher_id']}   </td> </tr>
+<tr><td>         Amount : ${a['payer_amount']}  ${a['voucher_currency']}  </td> </tr>
+         
+<tr><td> <tr><td> &nbsp; </td> </tr>
+<tr><td> &nbsp; </td> </tr>
+<tr><td> Mobile App #1 </td> </tr>
+<tr><td> Operator code 654321 </td></tr>
+<tr><td> Android: <a href='https://play.google.com/store/apps/details?id=com.telepacket.TpSmart&hl=en'> Click Here </a>   </td> </tr>
+<tr><td> Apple IOS: <a href='https://itunes.apple.com/us/app/tp-smart/id1039627255?ls=1&mt=8'> Click Here </a>    </td> </tr>
+<tr><td> &nbsp; </td> </tr>
+<tr><td> Mobile App #2 </td> </tr>
+<tr><td> Operator code 70085 </td></tr>
+<tr><td> Android: <a href='https://play.google.com/store/apps/details?id=com.freedialer.dialer&hl=en'> Click Here </a> </td> </tr>
+<tr><td> &nbsp; </td> </tr>
+<tr><td> Please feel free to contact us in case of any assiatnce, we are available on skype id 'mob-voip' </td> </tr>
+<tr><td> Whatsapp # +16473602360  </td> </tr>
+<tr><td> &nbsp;  </td> </tr>
+<tr><td> Thank you for Business! </td> </tr>
+<tr><td> &nbsp; </td> </tr>
+<tr><td>   Mob-Voip  Team. </td> </tr>
+</table>";
+ 
+#$bcc = "mail@mob-voip.net";
+$to = $_POST['email'];
+$subject = 'Top Up Voucher Confirmation -'.$rowold->api_access;
+		$from ='info@mob-voip.net'; 
+        $headers  = "From: " . $from . "\r\n";
+		$headers .= "Reply-To: ". $from . "\r\n";
+		$headers .= "MIME-Version: 1.0\r\n";
+		$headers .= "Content-Type: text/html; charset=ISO-8859-1\r\n";
+
+ 
+	externalmail($to,$subject,$body);
+
+
+
+	 
+
+
+
+}
+
+
+function saveMail($frm)
+{
+
+ 
+	$text = "--------------------------- \n";
+	foreach ($frm as $key=>$value) 
+	{
+		$text .= "$key=$value, \n";
+	}
+	$log_file = 'sms_log.txt';
+	$fp=fopen($log_file,'a');
+	fwrite($fp, $text . "\n\n");
+	fwrite($fp, $sql . "\n\n");
+	fclose($fp);  // close fil
+
+
+}
+
+function savedb($data){
+		$reseller_id = $_POST['reseller_id']; 
+		  $voucher_id = $data['voucher_id'];
+		$payer_amount = $data['payer_amount'];
+	  $voucher_value  = $data['value'];
+	$voucher_currency = $data['voucher_currency'];
+			  $result = $data['result'];
+			$username = $data['username'];
+		   $remote_ip = $_SERVER['REMOTE_ADDR'];
+		 
+		$sqlupdt =  "INSERT INTO vouchers (reseller_id, voucher_id, `payer_amount`, `voucher_value`,`voucher_currency`,`result`,`username`,`remote_ip`)
+				     VALUES ($reseller_id,'$voucher_id', $payer_amount, $voucher_value, '$voucher_currency',$result, '$username','$remote_ip');";
+		mysqli_query([con],$sqlupdt);
+
+}
+
+
+?>
+</div>
+<body>
+<html>
